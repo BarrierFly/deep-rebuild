@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "package": "cn.blockforge.generated.deeprebuild.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "client": [
+    "CreateWorldScreenMixin",
+    "SelectWorldScreenMixin",
+    "WorldEntryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

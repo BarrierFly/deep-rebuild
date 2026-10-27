@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "id": "deeprebuild",
+  "version": "${version}",
+  "name": "深重建 Deep Rebuild",
+  "description": "在单人世界的「重建」按钮旁加一个「深重建」：保留原版重建会带走的设置，再把存档目录里不涉及游戏进度的额外配置与文件（含其他模组给存档加的配置）一并复制到新存档。世界数据、玩家数据、游戏时间、统计信息和图标不会被复制。",
+  "authors": [
+    "AutoMods"
+  ],
+  "license": "WTFPL",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "cn.blockforge.generated.deeprebuild.DeepRebuildClient"
+    ]
+  },
+  "mixins": [
+    {
+      "config": "deeprebuild.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "minecraft": "~1.19.4",
+    "java": ">=17",
+    "fabric-api": "*"
+  }
+}
