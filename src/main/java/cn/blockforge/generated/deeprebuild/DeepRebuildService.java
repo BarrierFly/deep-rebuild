@@ -1,11 +1,19 @@
 package cn.blockforge.generated.deeprebuild;
 
+//? if >=26 {
+/*import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
+import net.minecraft.world.level.storage.LevelResource;
+ *///?} else {
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.WorldSavePath;
+//?}
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.level.storage.LevelSummary;
 
 import java.io.IOException;
@@ -34,16 +42,26 @@ public final class DeepRebuildService {
 
     // ------------------------------------------------------------------ 会话
 
+    //? if >=26 {
+    /*public static void beginSession(Minecraft minecraft, LevelSummary summary) {
+        Path saves = minecraft.getLevelSource().getBaseDir();
+        Path root = saves.resolve(summary.getLevelId());
+     *///?} else {
     public static void beginSession(MinecraftClient client, LevelSummary summary) {
         Path saves = client.getLevelStorage().getSavesDirectory();
         Path root = saves.resolve(summary.getName());
+    //?}
         if (!Files.isDirectory(root)) {
             DeepRebuildClient.LOGGER.warn("找不到存档目录 {}", root);
             session = null;
             return;
         }
         FilterRules rules = FilterRules.fromConfig();
+        //? if >=26 {
+        /*session = DeepRebuildPlan.build(root, summary.getLevelName(), rules);
+         *///?} else {
         session = DeepRebuildPlan.build(root, summary.getDisplayName(), rules);
+        //?}
         DeepRebuildClient.LOGGER.info("深重建清单：{} 个文件可复制，共 {}，来源 {}",
                 session.totalCount(), DeepRebuildUtil.bytes(session.totalBytes()), root);
     }
@@ -98,7 +116,12 @@ public final class DeepRebuildService {
         }
         Path target;
         try {
+            //? if >=26 {
+            /*// ROOT 常量是「.」，resolve 出来的文件名也会是「.」，规范化后才是真实目录名。
+            target = server.getWorldPath(LevelResource.ROOT).normalize();
+             *///?} else {
             target = server.getSavePath(WorldSavePath.ROOT);
+            //?}
         } catch (Throwable t) {
             DeepRebuildClient.LOGGER.warn("拿不到新存档目录，深重建取消", t);
             return;
@@ -164,6 +187,51 @@ public final class DeepRebuildService {
 
     // ------------------------------------------------------------ 聊天栏报账
 
+    //? if >=26 {
+    /*public static void onClientTick(Minecraft minecraft) {
+        if (pendingReport == null) {
+            return;
+        }
+        if (minecraft.level == null || minecraft.player == null) {
+            chatDelay = CHAT_DELAY_TICKS;
+            return;
+        }
+        if (chatDelay > 0) {
+            chatDelay--;
+            return;
+        }
+        Report report = pendingReport;
+        pendingReport = null;
+        if (report == null) {
+            return;
+        }
+        if (report.aborted) {
+            send(minecraft, Component.translatable("deeprebuild.chat.skipped").withStyle(ChatFormatting.RED));
+            return;
+        }
+        if (report.copied == 0 && report.failed == 0) {
+            send(minecraft, Component.translatable("deeprebuild.chat.nofiles").withStyle(ChatFormatting.GRAY));
+            return;
+        }
+        MutableComponent line = Component.translatable("deeprebuild.chat.header").withStyle(ChatFormatting.AQUA)
+                .append(Component.translatable("deeprebuild.chat.done",
+                                report.copied,
+                                DeepRebuildUtil.bytes(report.bytes),
+                                report.elapsedMs)
+                        .withStyle(ChatFormatting.GRAY));
+        send(minecraft, line);
+        if (report.failed > 0) {
+            send(minecraft, Component.translatable("deeprebuild.chat.failed", report.failed).withStyle(ChatFormatting.RED));
+        }
+        for (String dir : report.topLevels) {
+            send(minecraft, Component.literal("  · " + dir).withStyle(ChatFormatting.DARK_GRAY));
+        }
+    }
+
+    private static void send(Minecraft minecraft, Component text) {
+        minecraft.gui.hud.getChat().addClientSystemMessage(text);
+    }
+     *///?} else {
     public static void onClientTick(MinecraftClient client) {
         if (pendingReport == null) {
             return;
@@ -209,6 +277,7 @@ public final class DeepRebuildService {
             client.inGameHud.getChatHud().addMessage(text);
         }
     }
+    //?}
 
     // ---------------------------------------------------------------- 数据类
 

@@ -58,16 +58,54 @@
 ## 构建
 
 ```bash
-gradle build        # 产物：build/libs/deeprebuild-1.0.0.jar
+./gradlew build             # 构建全部四个版本
+./gradlew :1.21.11:build    # 只构建某一个版本
 ```
 
-工程用 Gradle 8.12.1 + Fabric Loom 1.10.5 + Java 17，wrapper 由开发环境提供。
+仓库自带 Gradle wrapper（Gradle 9.8.2）。构建机需要 Java 21+（运行 Gradle 用）；
+1.19.4 / 1.20.1 会以 `--release 17` 编译，1.21.11 / 26.3 以 `--release 21` 编译，
+不需要额外安装 JDK 17。产物在 `versions/<版本>/build/libs/deeprebuild-1.0.0-r1+<版本>.jar`。
 
-## 多版本
+## 多版本（Stonecutter）
 
-目标版本规划是 1.19.4 / 1.20.1 / 1.21.11 / 26.3（Fabric），用 Stonecutter 管理。
-当前仓库的**可构建目标只有 1.19.4**（本仓库只在这一个目标上编译验证过），
-另外三个版本的 Stonecutter 脚手架与需要适配的差异点写在 [`multiversion/README.md`](multiversion/README.md)。
+一套源码通过 [Stonecutter](https://stonecutter.kikugie.dev/)（0.9.8）编译出
+**1.19.4 / 1.20.1 / 1.21.11 / 26.3** 四个 Fabric 版本，四个目标都已在本仓库编译验证。
+
+- 版本矩阵在 `versions/<版本>/gradle.properties`（mappings、Fabric API、Java 版本等），
+  数值与 Fabric 官方索引核对过（2026-10）。
+- 版本差异用 Stonecutter 注释处理，例如 `//? if >=1.20 <26 { ... }`；
+  共享代码（配置、过滤、文件树、清单）不做分支。
+- `stonecutter active "1.19.4"` 决定根项目默认构建哪个版本（也是 IDE 编辑源码的基准版本）。
+
+| 版本 | Java | mappings | Fabric API |
+| --- | --- | --- | --- |
+| 1.19.4 | 17 | Yarn `1.19.4+build.2` | `0.87.2+1.19.4` |
+| 1.20.1 | 17 | Yarn `1.20.1+build.10` | `0.92.12+1.20.1` |
+| 1.21.11 | 21 | Yarn `1.21.11+build.6` | `0.141.6+1.21.11` |
+| 26.3 | 21 | 官方名（游戏已去混淆，无映射文件） | `0.165.0+26.3` |
+
+### 各版本实际差异（以 guardian 反编译源码核对为准）
+
+1. **渲染**：1.19.4 是 `Screen#render(MatrixStack, ...)` + `DrawableHelper.fill`；
+   1.20.1 / 1.21.11 换成 `DrawContext`（注意：1.20 就换了，不是 1.20.2）；
+   26.x 渲染整体改为抽取式，`Screen#render` 不复存在，改在
+   `extractRenderState(GuiGraphicsExtractor, ...)` 里画（widget 层是 final，按钮子类覆写 `extractContents`）。
+2. **输入**：1.21.11 起 `mouseClicked`/`mouseScrolled`/`keyPressed` 换成事件对象
+   （Yarn 叫 `Click`，26.x 叫 `MouseButtonEvent`），滚动多了横向参数。
+3. **世界列表**：三个 Yarn 版本的 `SelectWorldScreen` / `WorldListWidget.WorldEntry`（字段 `level`）
+   / `recreate()` / 底部按钮排完全一致；26.x 换成 `WorldSelectionList.WorldListEntry`（字段 `summary`）、
+   `getSelectedOpt()`、`recreateWorld()`，「选中世界」回调从 `worldSelected(boolean, boolean)`
+   变成 `worldSelected(LevelSummary)`（26.x 叫 `updateButtonStatus`）。
+4. **创建世界**：三个 Yarn 版本一直是 `worldCreator` + `createLevel()` + `getWorldDirectoryName()`
+   （此前预期的 1.20.2 重构并没有发生）；26.x 换成 `uiState`（`WorldCreationUiState`）+
+   `onCreate()` + `getTargetFolder()`，关闭钩子也从 `close()` 变成 `onClose()`。
+5. **声音**：`PositionedSoundInstance.master` 在 1.21.11 改名 `ui`，26.x 是
+   `SimpleSoundInstance.forUI` + `SoundEvents.BEACON_DEACTIVATE`。
+6. **26.x 其它**：`setScreen` 挪到了 `minecraft.gui` 上，聊天栏报账走
+   `minecraft.gui.hud.getChat().addClientSystemMessage`，存档根目录用
+   `server.getWorldPath(LevelResource.ROOT)`（记得 `normalize()`，ROOT 常量是「.」），
+   依赖按 Fabric 迁移指南改用普通 `implementation`（`versions/26.3` 里已开
+   `fabric.loom.disableObfuscation`）。
 
 ## 授权
 
