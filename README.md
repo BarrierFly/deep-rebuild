@@ -90,6 +90,9 @@
    1.20.1 / 1.21.11 换成 `DrawContext`（注意：1.20 就换了，不是 1.20.2）；
    26.x 渲染整体改为抽取式，`Screen#render` 不复存在，改在
    `extractRenderState(GuiGraphicsExtractor, ...)` 里画（widget 层是 final，按钮子类覆写 `extractContents`）。
+   另外两个坑：1.21.11 起 `SelectWorldScreen` 自己不再声明 `render`（往它身上注入 render 会直接
+   "could not find any targets" 崩溃），粒子改由按钮子类在 `drawIcon` 里画；
+   1.21.11 的 `ClickableWidget#render`/`renderWidget` 都是 final，按钮子类能覆写的只有 `drawIcon`。
 2. **输入**：1.21.11 起 `mouseClicked`/`mouseScrolled`/`keyPressed` 换成事件对象
    （Yarn 叫 `Click`，26.x 叫 `MouseButtonEvent`），滚动多了横向参数。
 3. **世界列表**：三个 Yarn 版本的 `SelectWorldScreen` / `WorldListWidget.WorldEntry`（字段 `level`）
