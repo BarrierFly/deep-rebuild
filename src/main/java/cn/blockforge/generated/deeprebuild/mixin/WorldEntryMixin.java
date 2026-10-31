@@ -1,5 +1,6 @@
 package cn.blockforge.generated.deeprebuild.mixin;
 
+import cn.blockforge.generated.deeprebuild.WorldEntryAccess;
 //? if >=26 {
 /*import net.minecraft.client.gui.screens.worldselection.WorldSelectionList;
  *///?} else {
