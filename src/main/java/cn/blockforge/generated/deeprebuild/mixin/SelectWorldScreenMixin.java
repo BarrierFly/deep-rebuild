@@ -103,34 +103,54 @@ public abstract class SelectWorldScreenMixin extends Screen {
         button.active = this.recreateButton.active;
         this.deeprebuild$button = this.addDrawableChild(button);
         //?}
-        this.deeprebuild$reflow(button);
+        this.deeprebuild$layoutRow();
     }
+
+    /** 原版每次重算布局（返回本页、调整窗口大小）都会把按钮摆回网格原位，这里跟着再排一次。
+     * 1.19.4/1.20.1 重入时会整体重建界面、走 init 注入，不需要这个钩子。 */
+    //? if >=26 {
+    /*@Inject(method = "repositionElements", at = @At("TAIL"))
+    private void deeprebuild$onReposition(CallbackInfo ci) {
+        this.deeprebuild$layoutRow();
+    }
+     *///?} elif >=1.21 {
+    /*@Inject(method = "refreshWidgetPositions", at = @At("TAIL"))
+    private void deeprebuild$onReposition(CallbackInfo ci) {
+        this.deeprebuild$layoutRow();
+    }
+     *///?}
 
     //? if >=26 {
     /*@Unique
-    private void deeprebuild$reflow(AbstractWidget extra) {
+    private void deeprebuild$layoutRow() {
+        ParticleButton button = this.deeprebuild$button;
+        if (button == null || this.recreateButton == null) {
+            return;
+        }
+        button.setY(this.recreateButton.getY());
         List<AbstractWidget> row = new ArrayList<>();
         for (GuiEventListener element : this.children()) {
-            if (element instanceof AbstractWidget widget && widget != extra
-                    && widget.getY() == extra.getY()) {
+            if (element instanceof AbstractWidget widget && widget.getY() == this.recreateButton.getY()) {
                 row.add(widget);
             }
         }
-        row.add(extra);
         row.sort(Comparator.comparingInt(AbstractWidget::getX));
         GuiLayout.reflow(this.width, row, 4, 40);
     }
      *///?} else {
     @Unique
-    private void deeprebuild$reflow(ClickableWidget extra) {
+    private void deeprebuild$layoutRow() {
+        ParticleButton button = this.deeprebuild$button;
+        if (button == null || this.recreateButton == null) {
+            return;
+        }
+        button.setY(this.recreateButton.getY());
         List<ClickableWidget> row = new ArrayList<>();
         for (Element element : this.children()) {
-            if (element instanceof ClickableWidget widget && widget != extra
-                    && widget.getY() == extra.getY()) {
+            if (element instanceof ClickableWidget widget && widget.getY() == this.recreateButton.getY()) {
                 row.add(widget);
             }
         }
-        row.add(extra);
         row.sort(Comparator.comparingInt(ClickableWidget::getX));
         GuiLayout.reflow(this.width, row, 4, 40);
     }
