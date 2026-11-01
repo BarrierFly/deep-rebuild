@@ -24,6 +24,7 @@ import net.minecraft.network.chat.CommonComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.LevelSettings;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.levelgen.presets.WorldPreset;
  *///?} else {
@@ -44,12 +45,14 @@ import net.minecraft.text.MutableText;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.world.gen.WorldPreset;
+import net.minecraft.world.level.LevelInfo;
 //?}
 //? if <1.21 {
 import net.minecraft.world.dimension.DimensionOptions;
 //?} elif >=1.21 <26 {
 /*import net.minecraft.world.dimension.DimensionOptionsRegistryHolder;
  *///?}
+import java.nio.file.Path;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -112,13 +115,15 @@ public abstract class CreateWorldScreenMixin extends Screen {
     }
     //?}
 
-    /** 深重建会话里把重建带过来的维度反查回真正的世界类型预设（原版反推只认超平坦/调试）。 */
+    /** 深重建会话里把重建带过来的维度反查回真正的世界类型预设（原版反推只认超平坦/调试）。
+     *  WrapOperation 捕获外层方法参数时必须列出全部参数且顺序一致，所以下面把整张参数表抄全。 */
     //? if >=26 {
     /*@WrapOperation(method = "createFromExisting(Lnet/minecraft/client/Minecraft;Ljava/lang/Runnable;Lnet/minecraft/world/level/LevelSettings;Lnet/minecraft/client/gui/screens/worldselection/WorldCreationContext;Ljava/nio/file/Path;)Lnet/minecraft/client/gui/screens/worldselection/CreateWorldScreen;",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/level/levelgen/presets/WorldPresets;fromSettings(Lnet/minecraft/world/level/levelgen/WorldDimensions;)Ljava/util/Optional;"))
     private static Optional<ResourceKey<WorldPreset>> deeprebuild$matchWorldType(WorldDimensions carried,
-            Operation<Optional<ResourceKey<WorldPreset>>> original, WorldCreationContext context) {
+            Operation<Optional<ResourceKey<WorldPreset>>> original, Minecraft minecraft, Runnable onClose,
+            LevelSettings levelSettings, WorldCreationContext context, Path newDataPackDir) {
         return DeepRebuildWorldType.match(context, carried, original.call(carried));
     }
      *///?} elif >=1.21 {
@@ -126,7 +131,8 @@ public abstract class CreateWorldScreenMixin extends Screen {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/gen/WorldPresets;getWorldPreset(Lnet/minecraft/world/dimension/DimensionOptionsRegistryHolder;)Ljava/util/Optional;"))
     private static Optional<RegistryKey<WorldPreset>> deeprebuild$matchWorldType(DimensionOptionsRegistryHolder carried,
-            Operation<Optional<RegistryKey<WorldPreset>>> original, GeneratorOptionsHolder holder) {
+            Operation<Optional<RegistryKey<WorldPreset>>> original, MinecraftClient client, Runnable onClosed,
+            LevelInfo levelInfo, GeneratorOptionsHolder holder, Path dataPackTempDir) {
         return DeepRebuildWorldType.match(holder, carried, original.call(carried));
     }
      *///?} else {
@@ -134,7 +140,8 @@ public abstract class CreateWorldScreenMixin extends Screen {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/gen/WorldPresets;getWorldPreset(Lnet/minecraft/registry/Registry;)Ljava/util/Optional;"))
     private static Optional<RegistryKey<WorldPreset>> deeprebuild$matchWorldType(Registry<DimensionOptions> carried,
-            Operation<Optional<RegistryKey<WorldPreset>>> original, GeneratorOptionsHolder holder) {
+            Operation<Optional<RegistryKey<WorldPreset>>> original, MinecraftClient client, Screen parent,
+            LevelInfo levelInfo, GeneratorOptionsHolder holder, Path dataPackTempDir) {
         return DeepRebuildWorldType.match(holder, carried, original.call(carried));
     }
     //?}
