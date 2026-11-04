@@ -181,11 +181,14 @@ public final class DeepRebuildService {
      * 确认目标确实是本次深重建刚建出来的那个存档，返回 {@code null} 表示可以复制。
      *
      * <p>不能只看目录名：原版遇到重名会把目录改成「名字 (2)」，而 {@code getWorldDirectoryName()}
-     * / {@code getTargetFolder()} 给的是去重前的名字，比较必然对不上。也不能只看
-     * {@code playerdata/}、{@code stats/}、{@code advancements/} 这三个目录——1.21.11 的
-     * {@code PlayerSaveHandler} 构造函数里直接 {@code playerDataDir.mkdirs()}，而它在
-     * {@code MinecraftServer} 加载存档时就已创建，早于 SERVER_STARTING 事件，
-     * 于是任何新建存档到这一刻都「看起来不新」。所以主判据改成目录 mtime。</p>
+     * / {@code getTargetFolder()} 给的是去重前的名字，比较必然对不上。所以主判据是目录 mtime。</p>
+     *
+     * <p>这里也<b>不能</b>只判断 {@code playerdata/} 这个目录存不存在。{@code PlayerSaveHandler}
+     * 的构造函数里会无条件 {@code playerDataDir.mkdirs()}，而它由 {@code MinecraftServer}
+     * 的构造函数通过 {@code createSaveHandler()} 触发，早于 SERVER_STARTING 事件——也就是说
+     * 任何新建存档跑到这里时，都已经有一个<b>空的</b> {@code playerdata/}。
+     * 所以改为判断「目录里是否真的有玩家存档文件」：只有真的存在 {@code *.dat}
+     * 才说明这是玩过的旧存档。</p>
      */
     private static SkipReason verifyTarget(Path target, PendingJob job) {
         Path real;
@@ -216,17 +219,48 @@ public final class DeepRebuildService {
         if (modified + FRESH_SLACK_MS < job.createdAt) {
             return SkipReason.NOT_NEW;
         }
-        // 目录是刚建的，但里面已经有玩家数据 / 统计 / 进度，说明落到了别处（或被别的流程写过）。
-        if (Files.exists(real.resolve("playerdata"))) {
+        // 目录是刚建的，但里面已经有真正的进度数据，说明落到了别处（或被别的流程写过）。
+        // playerdata/ 会被原版提前建成空目录，必须看里面有没有存档文件才算数。
+        if (hasPlayerDataFiles(real.resolve("playerdata"))) {
             return SkipReason.HAS_PLAYERDATA;
         }
-        if (Files.exists(real.resolve("stats"))) {
+        if (hasAnyFile(real.resolve("stats"))) {
             return SkipReason.HAS_STATS;
         }
-        if (Files.exists(real.resolve("advancements"))) {
+        if (hasAnyFile(real.resolve("advancements"))) {
             return SkipReason.HAS_ADVANCEMENTS;
         }
         return null;
+    }
+
+    /** 目录里有没有玩家存档文件（{@code <uuid>.dat}）。空目录或只有 {@code .dat_old} 之类不算。 */
+    private static boolean hasPlayerDataFiles(Path dir) {
+        if (!Files.isDirectory(dir)) {
+            return false;
+        }
+        try (java.util.stream.Stream<Path> entries = Files.list(dir)) {
+            return entries.anyMatch(path -> {
+                String name = path.getFileName().toString();
+                return name.endsWith(".dat") && !name.endsWith(".dat_old");
+            });
+        } catch (IOException e) {
+            // 读不出来时按「有数据」处理，宁可跳过也不误覆盖。
+            DeepRebuildClient.LOGGER.warn("读不到 {}，按已有玩家数据处理", dir, e);
+            return true;
+        }
+    }
+
+    /** 目录里有没有任何文件（统计 / 进度目录正常新建时是空的，甚至根本不建）。 */
+    private static boolean hasAnyFile(Path dir) {
+        if (!Files.isDirectory(dir)) {
+            return false;
+        }
+        try (java.util.stream.Stream<Path> entries = Files.list(dir)) {
+            return entries.anyMatch(Files::isRegularFile);
+        } catch (IOException e) {
+            DeepRebuildClient.LOGGER.warn("读不到 {}，按已有数据处理", dir, e);
+            return true;
+        }
     }
 
     private static void queueReport(Report report) {
