@@ -21,5 +21,12 @@
   "deeprebuild.chat.done": "已额外复制 %s 个文件，共 %s，用时 %s ms",
   "deeprebuild.chat.failed": "%s 个文件复制失败，详细原因见日志",
   "deeprebuild.chat.nofiles": "没有勾选额外文件，这次只按原版重建",
-  "deeprebuild.chat.skipped": "目标存档不是新建的，已跳过额外复制"
+  "deeprebuild.chat.skipped.self": "目标目录就是来源存档本身，已跳过额外复制",
+  "deeprebuild.chat.skipped.not_new": "目标存档不是新建的，已跳过额外复制",
+  "deeprebuild.chat.skipped.no_target": "找不到目标存档目录，已跳过额外复制",
+  "deeprebuild.chat.skipped.playerdata": "目标存档里已有玩家数据，已跳过额外复制",
+  "deeprebuild.chat.skipped.stats": "目标存档里已有统计数据，已跳过额外复制",
+  "deeprebuild.chat.skipped.advancements": "目标存档里已有进度数据，已跳过额外复制",
+  "deeprebuild.chat.skipped.too_large": "勾选内容超过体积上限，已跳过额外复制",
+  "deeprebuild.chat.skipped.timeout": "深重建任务已超时作废，已跳过额外复制"
 }

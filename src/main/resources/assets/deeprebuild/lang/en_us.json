@@ -21,5 +21,12 @@
   "deeprebuild.chat.done": "copied %s extra file(s), %s in %s ms",
   "deeprebuild.chat.failed": "%s file(s) failed to copy, see the log",
   "deeprebuild.chat.nofiles": "No extra file selected, this is a plain vanilla re-create",
-  "deeprebuild.chat.skipped": "Target save does not look new, extra copy skipped"
+  "deeprebuild.chat.skipped.self": "Target folder is the source save itself, extra copy skipped",
+  "deeprebuild.chat.skipped.not_new": "Target save does not look new, extra copy skipped",
+  "deeprebuild.chat.skipped.no_target": "Target save folder not found, extra copy skipped",
+  "deeprebuild.chat.skipped.playerdata": "Target save already has player data, extra copy skipped",
+  "deeprebuild.chat.skipped.stats": "Target save already has statistics, extra copy skipped",
+  "deeprebuild.chat.skipped.advancements": "Target save already has advancements, extra copy skipped",
+  "deeprebuild.chat.skipped.too_large": "Selection exceeds the size limit, extra copy skipped",
+  "deeprebuild.chat.skipped.timeout": "Deep Rebuild task expired, extra copy skipped"
 }

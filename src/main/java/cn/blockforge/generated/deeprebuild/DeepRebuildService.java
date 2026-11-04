@@ -112,6 +112,7 @@ public final class DeepRebuildService {
         }
         if (System.currentTimeMillis() - job.createdAt > 300_000L) {
             DeepRebuildClient.LOGGER.warn("深重建任务超时，已忽略");
+            queueReport(Report.skip(job, SkipReason.TIMEOUT));
             return;
         }
         Path target;
@@ -124,20 +125,20 @@ public final class DeepRebuildService {
             //?}
         } catch (Throwable t) {
             DeepRebuildClient.LOGGER.warn("拿不到新存档目录，深重建取消", t);
+            queueReport(Report.skip(job, SkipReason.NO_TARGET));
             return;
         }
-        String dirName = target.getFileName() == null ? "" : target.getFileName().toString();
-        boolean sameName = dirName.equals(job.directoryName);
-        if (!sameName && !looksFresh(target)) {
-            DeepRebuildClient.LOGGER.warn("目标存档 {} 不是新建的，深重建跳过", target);
-            queueReport(new Report(job, 0, 0L, 0L, 0, true));
+        SkipReason skip = verifyTarget(target, job);
+        if (skip != null) {
+            DeepRebuildClient.LOGGER.warn("深重建跳过（{}）：目标 {}", skip.name(), target);
+            queueReport(Report.skip(job, skip, target));
             return;
         }
         long maxBytes = DeepRebuildConfig.maxTotalBytes();
         if (maxBytes > 0L && job.totalBytes > maxBytes) {
             DeepRebuildClient.LOGGER.warn("勾选内容 {} 超过上限 {}，深重建跳过",
                     DeepRebuildUtil.bytes(job.totalBytes), DeepRebuildUtil.bytes(maxBytes));
-            queueReport(new Report(job, 0, 0L, 0L, 0, true));
+            queueReport(Report.skip(job, SkipReason.TOO_LARGE));
             return;
         }
 
@@ -170,14 +171,62 @@ public final class DeepRebuildService {
         long elapsedMs = (System.nanoTime() - start) / 1_000_000L;
         DeepRebuildClient.LOGGER.info("深重建完成：{} 个文件，{}，用时 {} ms，失败 {} 个",
                 copied, DeepRebuildUtil.bytes(bytes), elapsedMs, failed);
-        queueReport(new Report(job, copied, bytes, elapsedMs, failed, false));
+        queueReport(new Report(job, copied, bytes, elapsedMs, failed));
     }
 
-    /** 新建的存档里一定还没有玩家数据、统计和进度。 */
-    private static boolean looksFresh(Path target) {
-        return !Files.exists(target.resolve("playerdata"))
-                && !Files.exists(target.resolve("stats"))
-                && !Files.exists(target.resolve("advancements"));
+    /** 目标存档目录建成的宽限：目录 mtime 必须晚于 armCreate 至少这么多，避免创建瞬间的抖动误判。 */
+    private static final long FRESH_SLACK_MS = 2_000L;
+
+    /**
+     * 确认目标确实是本次深重建刚建出来的那个存档，返回 {@code null} 表示可以复制。
+     *
+     * <p>不能只看目录名：原版遇到重名会把目录改成「名字 (2)」，而 {@code getWorldDirectoryName()}
+     * / {@code getTargetFolder()} 给的是去重前的名字，比较必然对不上。也不能只看
+     * {@code playerdata/}、{@code stats/}、{@code advancements/} 这三个目录——1.21.11 的
+     * {@code PlayerSaveHandler} 构造函数里直接 {@code playerDataDir.mkdirs()}，而它在
+     * {@code MinecraftServer} 加载存档时就已创建，早于 SERVER_STARTING 事件，
+     * 于是任何新建存档到这一刻都「看起来不新」。所以主判据改成目录 mtime。</p>
+     */
+    private static SkipReason verifyTarget(Path target, PendingJob job) {
+        Path real;
+        try {
+            real = target.toAbsolutePath().normalize();
+        } catch (RuntimeException e) {
+            return SkipReason.NO_TARGET;
+        }
+        Path source;
+        try {
+            source = job.sourceRoot.toAbsolutePath().normalize();
+        } catch (RuntimeException e) {
+            source = job.sourceRoot;
+        }
+        if (real.equals(source)) {
+            return SkipReason.SELF;
+        }
+        if (!Files.isDirectory(real)) {
+            return SkipReason.NO_TARGET;
+        }
+        long modified;
+        try {
+            modified = Files.getLastModifiedTime(real).toMillis();
+        } catch (IOException e) {
+            DeepRebuildClient.LOGGER.warn("读不到目标存档目录的修改时间 {}", real, e);
+            return SkipReason.NOT_NEW;
+        }
+        if (modified + FRESH_SLACK_MS < job.createdAt) {
+            return SkipReason.NOT_NEW;
+        }
+        // 目录是刚建的，但里面已经有玩家数据 / 统计 / 进度，说明落到了别处（或被别的流程写过）。
+        if (Files.exists(real.resolve("playerdata"))) {
+            return SkipReason.HAS_PLAYERDATA;
+        }
+        if (Files.exists(real.resolve("stats"))) {
+            return SkipReason.HAS_STATS;
+        }
+        if (Files.exists(real.resolve("advancements"))) {
+            return SkipReason.HAS_ADVANCEMENTS;
+        }
+        return null;
     }
 
     private static void queueReport(Report report) {
@@ -205,8 +254,12 @@ public final class DeepRebuildService {
         if (report == null) {
             return;
         }
-        if (report.aborted) {
-            send(minecraft, Component.translatable("deeprebuild.chat.skipped").withStyle(ChatFormatting.RED));
+        if (report.skipped != null) {
+            send(minecraft, Component.translatable("deeprebuild.chat.header").withStyle(ChatFormatting.AQUA)
+                    .append(Component.translatable(report.skipped.translationKey()).withStyle(ChatFormatting.RED)));
+            if (!report.targetPath.isEmpty()) {
+                send(minecraft, Component.literal("  · " + report.targetPath).withStyle(ChatFormatting.DARK_GRAY));
+            }
             return;
         }
         if (report.copied == 0 && report.failed == 0) {
@@ -249,8 +302,12 @@ public final class DeepRebuildService {
         if (report == null) {
             return;
         }
-        if (report.aborted) {
-            send(client, Text.translatable("deeprebuild.chat.skipped").formatted(Formatting.RED));
+        if (report.skipped != null) {
+            send(client, Text.translatable("deeprebuild.chat.header").formatted(Formatting.AQUA)
+                    .append(Text.translatable(report.skipped.translationKey()).formatted(Formatting.RED)));
+            if (!report.targetPath.isEmpty()) {
+                send(client, Text.literal("  · " + report.targetPath).formatted(Formatting.DARK_GRAY));
+            }
             return;
         }
         if (report.copied == 0 && report.failed == 0) {
@@ -281,6 +338,36 @@ public final class DeepRebuildService {
 
     // ---------------------------------------------------------------- 数据类
 
+    /** 复制被跳过的原因；每一种都对应一条独立的聊天栏文案，省得再翻日志。 */
+    private enum SkipReason {
+        /** 目标目录就是源存档本身。 */
+        SELF("chat.skipped.self"),
+        /** 目标目录不是本次重建新建的（mtime 早于 armCreate）。 */
+        NOT_NEW("chat.skipped.not_new"),
+        /** 拿不到或找不到目标存档目录。 */
+        NO_TARGET("chat.skipped.no_target"),
+        /** 目标里已经有玩家数据。 */
+        HAS_PLAYERDATA("chat.skipped.playerdata"),
+        /** 目标里已经有统计数据。 */
+        HAS_STATS("chat.skipped.stats"),
+        /** 目标里已经有进度数据。 */
+        HAS_ADVANCEMENTS("chat.skipped.advancements"),
+        /** 勾选内容超过配置的体积上限。 */
+        TOO_LARGE("chat.skipped.too_large"),
+        /** 从确认到服务器启动之间拖了太久，任务已作废。 */
+        TIMEOUT("chat.skipped.timeout");
+
+        private final String key;
+
+        SkipReason(String key) {
+            this.key = "deeprebuild." + key;
+        }
+
+        String translationKey() {
+            return this.key;
+        }
+    }
+
     private static final class PendingJob {
         final Path sourceRoot;
         final String directoryName;
@@ -305,15 +392,17 @@ public final class DeepRebuildService {
         final long bytes;
         final long elapsedMs;
         final int failed;
-        final boolean aborted;
+        final SkipReason skipped;
+        final String targetPath;
         final List<String> topLevels = new ArrayList<>();
 
-        Report(PendingJob job, int copied, long bytes, long elapsedMs, int failed, boolean aborted) {
+        Report(PendingJob job, int copied, long bytes, long elapsedMs, int failed) {
             this.copied = copied;
             this.bytes = bytes;
             this.elapsedMs = elapsedMs;
             this.failed = failed;
-            this.aborted = aborted;
+            this.skipped = null;
+            this.targetPath = "";
             java.util.Set<String> tops = new java.util.LinkedHashSet<>();
             for (Path file : job.files) {
                 try {
@@ -329,6 +418,23 @@ public final class DeepRebuildService {
                 }
             }
             this.topLevels.addAll(tops);
+        }
+
+        private Report(PendingJob job, SkipReason skipped, String targetPath) {
+            this.copied = 0;
+            this.bytes = 0L;
+            this.elapsedMs = 0L;
+            this.failed = 0;
+            this.skipped = skipped;
+            this.targetPath = targetPath == null ? "" : targetPath;
+        }
+
+        static Report skip(PendingJob job, SkipReason reason) {
+            return new Report(job, reason, "");
+        }
+
+        static Report skip(PendingJob job, SkipReason reason, Path target) {
+            return new Report(job, reason, target == null ? "" : target.toString());
         }
     }
 }
