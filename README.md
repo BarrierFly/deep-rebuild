@@ -66,7 +66,7 @@
 
 仓库自带 Gradle wrapper（Gradle 9.8.2）。构建机需要 Java 21+（运行 Gradle 用）；
 1.19.4 / 1.20.1 会以 `--release 17` 编译，1.21.11 / 26.3 以 `--release 21` 编译，
-不需要额外安装 JDK 17。产物在 `versions/<版本>/build/libs/deeprebuild-1.0.0-r2+<版本>.jar`。
+不需要额外安装 JDK 17。产物在 `versions/<版本>/build/libs/deeprebuild-1.0.1+<版本>.jar`。
 
 ## 多版本（Stonecutter）
 
